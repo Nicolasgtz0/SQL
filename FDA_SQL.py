@@ -14,8 +14,6 @@ import sqlalchemy
 import pandas as pd
 from sklearn import preprocessing 
 
-
-
 def read(filename:str):
     """
     Parameters
@@ -50,7 +48,29 @@ def append_to_db(df1: pd.DataFrame, df2: pd.DataFrame):
         df1.to_sql('applicant', conn, index=False, if_exists='append')
         df2.to_sql('everything', conn, index=False, if_exists='append')
         #df1.to_sql('loan_intent', engine, index=False, if_exists='append')
-        #df2.to_sql('everything', engine, index=False, if_exists='append')  
+        #df2.to_sql('everything', engine, index=False, if_exists='append')
+        
+def create_bridge (df3: pd.DataFrame):
+    '''
+    Creating a bridge dataframe that will assist in the deduplication process
+    
+    Args:
+        df(pd.DataFrame): applicants df, that reference the applicant table
+    Returns:
+        pandas bridge DataFrame 
+    '''
+    bridgedf = pd.Dataframe(columns=['parent_id','applicant_id'])
+    bridgedf['parent_id'] = df3['id']
+    bridgedf['applicant_id'] = df3['id']
+    
+    for i, app1 in df3.iterrows():
+        for j, app2 in df3.iloc[i+1:].iterrows():
+            if app1['applicant'] in app2['applicant']:
+                bridgedf['parent_id'][j] = df3['id'][i]
+            elif app2['applicant'] in app1['applicant']:
+                bridgedf['parent_id'][i] = df3['id'][j]
+    return bridgedf
+                
 
 if __name__ =='__main__': 
     sqliteConnection = sqlite3.connect('FDA.db') 
@@ -71,9 +91,17 @@ if __name__ =='__main__':
         applicant_id INTEGER,
         FOREIGN KEY(applicant_id) REFERENCES applicant(id) 
         );''' 
-
+    
+    bridge = '''
+    CREATE TABLE IF NOT EXISTS bridge (
+        applicant_id INTEGER,
+        parent_id INTEGER,
+        FOREIGN KEY(parent_id) REFERENCES applicant(id)
+        );'''
+    
     cursor.execute(applicant)
     cursor.execute(everything)
+    cursor.execute(bridge)
     cursor.close()
     
     applicantdf, everythingdf = read('FDA.csv') 
